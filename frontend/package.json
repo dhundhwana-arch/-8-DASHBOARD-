@@ -1,8 +1,8 @@
 {
   "name": "custom-shirt-studio-module08-admin-frontend",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "Custom Shirt Studio — Module 08 Small Business Admin Dashboard Frontend (Phase 03 Auth Gate)",
+  "description": "Custom Shirt Studio — Module 08 Small Business Admin Dashboard Frontend (Phase 04 Dashboard Overview)",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

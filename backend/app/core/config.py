@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Custom Shirt Studio — Small Business Admin Dashboard"
-    app_version: str = "0.3.0"
+    app_version: str = "0.4.0"
     app_env: AppEnvironment = AppEnvironment.DEVELOPMENT
     api_v1_admin_prefix: str = "/api/v1/admin"
 
@@ -78,12 +78,16 @@ class Settings(BaseSettings):
 
     # External module integration mode & service URLs (Phase 04+ adapters)
     integration_mode: IntegrationMode = IntegrationMode.LIVE
+    upstream_connect_timeout_seconds: float = Field(default=2.0, ge=0.2, le=15.0)
+    upstream_read_timeout_seconds: float = Field(default=5.0, ge=0.2, le=30.0)
     module_01_base_url: str = ""
     module_02_base_url: str = ""
     module_02_admin_api_key: SecretStr = Field(default=SecretStr(""), repr=False)
     module_05_base_url: str = ""
     module_06_base_url: str = ""
     module_07_base_url: str = ""
+    module_07_contract_verified: bool = False
+    module_07_service_bearer_token: SecretStr = Field(default=SecretStr(""), repr=False)
 
     @property
     def parsed_cors_origins(self) -> list[str]:
@@ -98,6 +102,9 @@ class Settings(BaseSettings):
         m02_key = self.module_02_admin_api_key.get_secret_value()
         if m02_key:
             literals.append(m02_key)
+        m07_key = self.module_07_service_bearer_token.get_secret_value()
+        if m07_key:
+            literals.append(m07_key)
         return literals
 
     @model_validator(mode="after")

@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppRoutes } from "../App";
 import { getInMemoryCsrfToken, setInMemoryCsrfToken } from "../api/client";
+import { DashboardOverviewPayload } from "../api/dashboard";
 import { AuthProvider } from "../auth/AuthContext";
 import { I18nProvider } from "../i18n/I18nProvider";
 
@@ -22,7 +23,48 @@ function renderAppAt(initialPath: string) {
   );
 }
 
-describe("Phase 03 Frontend Auth Gate, CSRF Memory Binding & Route Protection", () => {
+const minimalLiveOverview: DashboardOverviewPayload = {
+  generated_at: "2026-11-16T08:00:00Z",
+  access_scope: "FULL",
+  integration_mode: "live",
+  has_mock_data: false,
+  order_overview: {
+    module_code: "MODULE_07",
+    module_name: "tailoring-order-manager",
+    source_status: "CONTRACT_UNCONFIGURED",
+    is_verified_live: false,
+    is_mock_data: false,
+    checked_at: "2026-11-16T08:00:00Z",
+    latency_ms: null,
+    error_code: null,
+    error_message: "Module 07 contract not yet configured.",
+    data: null,
+  },
+  fabric_overview: {
+    module_code: "MODULE_02",
+    module_name: "fabric-catalog-system",
+    source_status: "CONTRACT_UNCONFIGURED",
+    is_verified_live: false,
+    is_mock_data: false,
+    checked_at: "2026-11-16T08:00:00Z",
+    latency_ms: null,
+    error_code: null,
+    error_message: "Module 02 base URL not configured.",
+    data: null,
+  },
+  integration_health: [],
+  pending_actions: [],
+  operational_alerts: [],
+  governance_summary: {
+    source_status: "VERIFIED",
+    active_admin_users_count: 1,
+    active_sessions_count: 1,
+    security_events_last_24h_count: 0,
+  },
+  recent_activity: [],
+};
+
+describe("Phase 03–04 Frontend Auth Gate, CSRF Memory Binding & Route Protection", () => {
   beforeEach(() => {
     setInMemoryCsrfToken(null);
     window.localStorage.clear();
@@ -45,7 +87,9 @@ describe("Phase 03 Frontend Auth Gate, CSRF Memory Binding & Route Protection", 
 
     renderAppAt("/");
 
-    expect(await screen.findByRole("heading", { name: /Administrator Sign In/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /Administrator Sign In/i })
+    ).toBeInTheDocument();
   });
 
   it("switches login labels cleanly between English and Gujarati", async () => {
@@ -67,13 +111,11 @@ describe("Phase 03 Frontend Auth Gate, CSRF Memory Binding & Route Protection", 
   it("displays generic error on 401 invalid login and rate-limit warning on 429", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      // 1. Initial /auth/me check -> 401
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ error: { code: "AUTHENTICATION_REQUIRED" } }), {
           status: 401,
         })
       )
-      // 2. First login attempt -> 401
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -85,7 +127,6 @@ describe("Phase 03 Frontend Auth Gate, CSRF Memory Binding & Route Protection", 
           { status: 401, headers: { "Content-Type": "application/json" } }
         )
       )
-      // 3. Second login attempt -> 429
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -107,7 +148,9 @@ describe("Phase 03 Frontend Auth Gate, CSRF Memory Binding & Route Protection", 
     await userEvent.type(pwField, "WrongPass#1234");
     await userEvent.click(submitBtn);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid username or password.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Invalid username or password."
+    );
 
     await userEvent.click(submitBtn);
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -136,23 +179,40 @@ describe("Phase 03 Frontend Auth Gate, CSRF Memory Binding & Route Protection", 
         is_current: true,
       },
       csrf_token: csrfValue,
-      permissions: ["users:manage", "audit:view_all"],
+      permissions: [
+        "dashboard:view_limited",
+        "dashboard:view_full",
+        "users:view",
+        "users:manage",
+        "audit:view_operational",
+        "audit:view_all",
+      ],
       auth_federation_status: "STANDALONE_LOCAL",
     };
 
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
+      // 1. /auth/me -> 401
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ error: { code: "AUTHENTICATION_REQUIRED" } }), {
           status: 401,
         })
       )
+      // 2. /auth/login -> 200
       .mockResolvedValueOnce(
         new Response(JSON.stringify(sessionPayload), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         })
       )
+      // 3. /dashboard/overview -> 200
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(minimalLiveOverview), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+      // 4. /auth/logout -> 200
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ status: "logged_out" }), {
           status: 200,
@@ -166,7 +226,7 @@ describe("Phase 03 Frontend Auth Gate, CSRF Memory Binding & Route Protection", 
     await userEvent.click(screen.getByRole("button", { name: "Sign In" }));
 
     expect(
-      await screen.findByRole("heading", { name: /Authenticated Session Active/i })
+      await screen.findByRole("heading", { name: /Workshop Dashboard Overview/i })
     ).toBeInTheDocument();
 
     // CSRF token is held in memory only — never written to browser storage
@@ -174,17 +234,21 @@ describe("Phase 03 Frontend Auth Gate, CSRF Memory Binding & Route Protection", 
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
 
-    await userEvent.click(screen.getByRole("button", { name: /Sign Out/i }));
+    const signOutButtons = screen.getAllByRole("button", { name: /Sign Out/i });
+    await userEvent.click(signOutButtons[0]);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /Administrator Sign In/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: /Administrator Sign In/i })
+      ).toBeInTheDocument();
     });
     expect(getInMemoryCsrfToken()).toBeNull();
 
-    // Verify logout call included X-CSRF-Token header
-    const logoutCall = fetchMock.mock.calls[2];
-    expect(logoutCall[0]).toBe("/api/v1/admin/auth/logout");
-    const sentHeaders = logoutCall[1]?.headers as Headers;
+    const logoutCall = fetchMock.mock.calls.find(
+      (call) => call[0] === "/api/v1/admin/auth/logout"
+    );
+    expect(logoutCall).toBeDefined();
+    const sentHeaders = logoutCall?.[1]?.headers as Headers;
     expect(sentHeaders.get("X-CSRF-Token")).toBe(csrfValue);
   });
 
@@ -220,6 +284,8 @@ describe("Phase 03 Frontend Auth Gate, CSRF Memory Binding & Route Protection", 
 
     renderAppAt("/owner-governance");
 
-    expect(await screen.findByRole("heading", { name: /Access Restricted/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /Access Restricted/i })
+    ).toBeInTheDocument();
   });
 });

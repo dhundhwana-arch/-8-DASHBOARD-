@@ -325,3 +325,21 @@ All three owner-approved roles enforce least-privilege access at the FastAPI dep
 | Unauthorized PII / measurement snooping | Default phone masking, opaque refs, order-scoped measurement checks, `Cache-Control: no-store`, mandatory audit trail. |
 | Audit tampering | `admin_audit_logs` exposed strictly via append-only service (`INSERT` + `SELECT` only; zero `UPDATE`/`DELETE` paths). |
 | Stack trace / internal detail leakage | Global FastAPI exception handlers log technical tracebacks server-side with `correlation_id` and return sanitized error envelopes to clients. |
+
+---
+
+## 10. Phase 04 Implementation Notes — Admin Dashboard Overview (`v0.4.0`)
+
+1. **Dashboard Overview & Integration Endpoints (`backend/app/api/v1/dashboard.py`):**
+   - `GET /api/v1/admin/dashboard/overview`: Requires `dashboard:view_limited` at the router gate and applies backend field/module scoping inside `DashboardService`:
+     - `OWNER` & `ADMINISTRATOR` (`dashboard:view_full` -> `access_scope="FULL"`): Receive full 7-module `integration_health`, full Module 02 variant breakdown, full Module 07 order counts (when verified), local Module 08 `governance_summary` (`security_events_last_24h_count` populated strictly for `OWNER`), and sanitized `recent_activity`.
+     - `AUTHORIZED_STAFF` (`dashboard:view_limited` -> `access_scope="LIMITED"`): Receive workshop-only stage counts (`active_orders`, `in_cutting_orders`, `in_stitching_orders`, `in_finishing_orders`, `quality_check_orders`, `ready_for_delivery_orders`, `on_hold_orders`, `urgent_active_orders`), workshop-relevant `integration_health` (`MODULE_02`, `MODULE_06`, `MODULE_07`), and `None` for business-wide order totals, governance counters, and recent audit activity.
+   - `GET /api/v1/admin/dashboard/integrations`: Requires `dashboard:view_full` (`403 PERMISSION_DENIED` + `PERMISSION_DENIED` security event when called by `AUTHORIZED_STAFF`).
+2. **Adapter Layer (`backend/app/adapters/`):**
+   - `SafeHttpTransport` (`base.py`): Enforces `connect=2.0s`, `read=5.0s` timeouts and a single `150ms` retry strictly on idempotent `GET` transport failures or `502`/`503`/`504`.
+   - `Module02FabricAdapter` (`module02_fabrics.py`): Consumes verified public `GET /api/v1/fabrics`, `/api/v1/categories`, `/api/v1/colours`, and `/api/v1/variants` with strict Pydantic v2 validation (`StrictInt`, `StrictBool`, verified `availability_status` enum). Never exposes `MODULE_02_ADMIN_API_KEY` or supplier/procurement data.
+   - `Module07OrderAdapter` (`module07_orders.py`): Defaults to `CONTRACT_UNCONFIGURED` (`data=None`, never `0`) until `MODULE_07_CONTRACT_VERIFIED=true` and `MODULE_07_BASE_URL` are explicitly configured (or `INTEGRATION_MODE=mock_dev` in non-production dev/tests).
+   - `summarize_design_snapshot` (`module03_designs.py`): Read-only validator for Module 03 `DSG-*` (`schema_version="1.0.0"`) snapshots.
+3. **Responsive Bilingual Shell (`frontend/src/`):**
+   - Mobile-first `AdminLayout` with collapsible mobile drawer (`< lg`) and persistent desktop sidebar (`>= lg`), rendering **only** implemented & role-accessible sections (`/`, `/users`, `/activity-logs`, `/session`).
+   - Full English (`en`) and Gujarati (`gu`) localization, unmistakable `MOCK_DEV` warning banner, 5-state `ProvenanceBadge`, and strict `"—"` rendering whenever a metric is `null`/unavailable.

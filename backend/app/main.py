@@ -1,4 +1,4 @@
-"""FastAPI application factory for Module 08 (Phase 03 Auth, RBAC, Session & Audit Core)."""
+"""FastAPI application factory for Module 08 (Phase 04 Admin Dashboard Overview)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from app.api.v1 import audit, auth, health, users
+from app.adapters.module02_fabrics import Module02FabricAdapter
+from app.adapters.module07_orders import Module07OrderAdapter
+from app.api.v1 import audit, auth, dashboard, health, users
 from app.core.auth import LocalSessionAuthProvider
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
@@ -56,7 +58,7 @@ def create_app(
         version=resolved_settings.app_version,
         description=(
             "Custom Shirt Studio — Module 08 Small Business Admin Dashboard Backend. "
-            "Phase 03: Authentication, Backend RBAC, Session Security & Immutable Audit Core."
+            "Phases 03–04: Auth, Backend RBAC, Session Security, Audit Core & Dashboard Overview."
         ),
         docs_url="/api/v1/admin/docs" if resolved_settings.app_env.value != "production" else None,
         redoc_url=None,
@@ -80,6 +82,8 @@ def create_app(
     app.state.settings = resolved_settings
     app.state.rate_limiter = rate_limiter
     app.state.auth_provider = auth_provider
+    app.state.fabric_adapter = Module02FabricAdapter(settings=resolved_settings)
+    app.state.order_adapter = Module07OrderAdapter(settings=resolved_settings)
 
     app.add_middleware(SecurityAndCorrelationMiddleware)
 
@@ -98,6 +102,7 @@ def create_app(
     prefix = resolved_settings.api_v1_admin_prefix
     app.include_router(health.router, prefix=prefix)
     app.include_router(auth.router, prefix=prefix)
+    app.include_router(dashboard.router, prefix=prefix)
     app.include_router(users.router, prefix=prefix)
     app.include_router(audit.router, prefix=prefix)
 

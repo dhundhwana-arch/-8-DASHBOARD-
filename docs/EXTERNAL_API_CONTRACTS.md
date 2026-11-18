@@ -191,6 +191,10 @@ Because Modules **01, 04, 05, 06, and 07** currently contain only initial scaffo
   1. Order payload carrying opaque references: `order_ref` (`ORD-...`), `customer_ref` (`CUS-...`), `design_ref` (`DSG-...`), `fabric_ref` (`FAB-...` / `FVAR-...`), `measurement_ref` (`MSR-...`), `quotation_ref` (`QTE-...`), `quantity`, `garment_type`, `is_urgent`, `current_status`, `allowed_transitions`, `latest_customer_update`, `created_at`, `updated_at`, and `timeline` events.
   2. Validated status transition endpoint enforcing Module 07's state machine and recording `requested_by_admin_id` and `correlation_id`.
   3. Aggregated stage-count endpoint so Dashboard Overview and Production Workload views do not need to paginate through every historical order.
+- **Phase 04 Re-Verification Note (2026-11-16):**
+  - `main` of `dhundhwana-arch/-7-TAILORING-ORDER-MANAGER` remains stubbed (`d83caf53`), while an unmerged working branch (`arena/77121da8-7-tailoring-order-manager` @ `efac38f4`) introduces draft FastAPI schemas for `GET /api/v1/capacity/workload` (`is_guaranteed_capacity`, `estimated_workload`, `capacity_warnings`, `scheduling_conflicts`) and `GET /api/v1/orders` (`{items, total, page, page_size, pages}`).
+  - Per Phase 04 integration boundaries (*"Keep order metrics unavailable until its real contract exists"*), `Module07OrderAdapter` keeps order metrics in `CONTRACT_UNCONFIGURED` (`data: null`, rendered as `—`, never `0`) by default unless `MODULE_07_CONTRACT_VERIFIED=true` + `MODULE_07_BASE_URL` are explicitly enabled after upstream contract merge/approval (or `INTEGRATION_MODE=mock_dev` is explicitly set in non-production dev/test).
+  - Similarly, `dhundhwana-arch/fabric-catalog-system` unmerged branch `arena/9fb44bec-fabric-catalog-system` (`fcbb0dce`) was re-verified: `Module02FabricAdapter` consumes strictly its verified public read endpoints (`GET /api/v1/fabrics`, `/api/v1/categories`, `/api/v1/colours`, `/api/v1/variants`) and never exposes `ADMIN_API_KEY` / `SERVICE_API_KEYS` or supplier/inventory procurement fields on Dashboard Overview.
 
 ---
 
